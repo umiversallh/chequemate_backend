@@ -58,8 +58,40 @@ class PerMatchResultChecker {
     try {
       console.log(`🔍 [PER_MATCH_CHECKER] Check #${checkCount + 1} for match ${matchId}: ${players.challenger} vs ${players.opponent}`);
       
-      // Check if match result exists
-      const result = await this.checkChessComResult(players.challenger, players.opponent, players.platform);
+      // Get actual Chess.com usernames from database
+      const matchQuery = await pool.query(`
+        SELECT om.platform,
+               cu.chess_com_username as challenger_chess_username,
+               ou.chess_com_username as opponent_chess_username,
+               cu.username as challenger_username, 
+               ou.username as opponent_username
+        FROM ongoing_matches om
+        JOIN challenges c ON om.challenge_id = c.id
+        JOIN users cu ON c.challenger = cu.id
+        JOIN users ou ON c.opponent = ou.id
+        WHERE om.id = $1
+      `, [matchId]);
+      
+      if (matchQuery.rows.length === 0) {
+        console.log(`❌ [PER_MATCH_CHECKER] No match data found for match ${matchId}`);
+        this.stopCheckingMatch(matchId);
+        return;
+      }
+      
+      const match = matchQuery.rows[0];
+      const challengerChessUsername = match.challenger_chess_username;
+      const opponentChessUsername = match.opponent_chess_username;
+      
+      if (!challengerChessUsername || !opponentChessUsername) {
+        console.log(`⚠️ [PER_MATCH_CHECKER] Missing Chess.com usernames for match ${matchId} - challenger: ${challengerChessUsername}, opponent: ${opponentChessUsername}`);
+        this.stopCheckingMatch(matchId);
+        return;
+      }
+      
+      console.log(`🎯 [PER_MATCH_CHECKER] Using Chess.com usernames: ${challengerChessUsername} vs ${opponentChessUsername}`);
+      
+      // Check if match result exists using actual Chess.com usernames
+      const result = await this.checkChessComResult(challengerChessUsername, opponentChessUsername, match.platform);
       
       if (result) {
         console.log(`🏆 [PER_MATCH_CHECKER] Match ${matchId} result found:`, result);
