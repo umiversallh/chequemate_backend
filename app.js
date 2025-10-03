@@ -625,6 +625,8 @@ async function initializeExistingMatches() {
     // First, let's check what data types we're working with
     console.log('🔍 [STARTUP] Checking database schema...');
     
+    let existingMatches;
+    
     try {
       // Check if there are any ongoing matches first
       const matchCount = await pool.query('SELECT COUNT(*) FROM ongoing_matches WHERE both_redirected = true AND result_checked = false');
@@ -636,7 +638,7 @@ async function initializeExistingMatches() {
       }
       
       // Get the matches with explicit casting to handle potential type mismatches
-      const existingMatches = await pool.query(`
+      existingMatches = await pool.query(`
         SELECT 
           om.id as match_id,
           om.match_started_at,
@@ -663,7 +665,7 @@ async function initializeExistingMatches() {
       
       try {
         // Fallback: simple query without joins
-        const simpleMatches = await pool.query(`
+        existingMatches = await pool.query(`
           SELECT 
             id as match_id,
             match_started_at,
@@ -676,15 +678,15 @@ async function initializeExistingMatches() {
             AND match_started_at IS NOT NULL
         `);
         
-        if (simpleMatches.rows.length === 0) {
+        if (existingMatches.rows.length === 0) {
           console.log('✅ [STARTUP] No existing matches need result checking (simple query)');
           return;
         }
         
-        console.log(`🚀 [STARTUP] Found ${simpleMatches.rows.length} matches that need result checking (simple query)`);
+        console.log(`🚀 [STARTUP] Found ${existingMatches.rows.length} matches that need result checking (simple query)`);
         
         // Use the simple matches data
-        for (const match of simpleMatches.rows) {
+        for (const match of existingMatches.rows) {
           const timeSinceStart = Date.now() - new Date(match.match_started_at).getTime();
           const minutesSinceStart = Math.floor(timeSinceStart / (1000 * 60));
           
